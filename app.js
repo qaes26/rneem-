@@ -229,6 +229,12 @@ class RneemApp {
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
 
+    // Verify video stream readiness
+    if (!this.video || this.video.readyState < 2 || !this.video.videoWidth) {
+      if (isManualClick) this.showError('الكاميرا غير جاهزة بعد. انتظر ثانية...');
+      return;
+    }
+
     this.isAnalyzing = true;
     this.captureBtn.classList.add('analyzing');
     this.updateStatus('جارٍ التعرّف...', 'analyzing');
@@ -255,7 +261,7 @@ class RneemApp {
 
       let result = null;
 
-      // 1. Try Netlify Function Proxy First
+      // 1. Try Netlify Function Proxy First (Backend serverless)
       try {
         const netlifyRes = await fetch('/.netlify/functions/analyze', {
           method: 'POST',
@@ -267,24 +273,27 @@ class RneemApp {
           result = await netlifyRes.json();
         }
       } catch (e) {
-        // Fallback to client call below
+        console.warn('[Rneem] Netlify Proxy bypassed:', e);
       }
 
-      // 2. Direct Gemini Call Fallback
+      // 2. Direct Gemini Call Fallback (Checks customApiKey, LOCAL_API_KEYS, and API_KEYS)
       if (!result || !result.word) {
-        const apiKey = this.getApiKey();
-        if (!apiKey) {
-          if (isManualClick) this.showError('يرجى التأكد من مفاتيح Gemini API');
+        const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
+        const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
+
+        if (validKeys.length === 0 && !this.customApiKey) {
+          if (isManualClick) this.showError('يرجى إضافة مفتاح API في الإعدادات ⚙️');
           return;
         }
 
         let attempts = 0;
         let response = null;
-        const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
         const maxAttempts = validKeys.length > 0 ? validKeys.length : 1;
 
         while (attempts < maxAttempts) {
           const currentKey = this.getApiKey();
+          if (!currentKey) break;
+
           response = await fetch(`${GEMINI_ENDPOINT}?key=${currentKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
