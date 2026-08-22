@@ -1,17 +1,16 @@
 // ═══════════════════════════════════════════════════════════════
-// 🔒 Netlify Serverless Function: Optimized Gemini Vision Engine
-// High Performance, Multi-Key Rotation & Auto-Retry
+// 🔒 Netlify Serverless Function: Ultra-Fast Gemini 1.5 Flash Engine
 // ═══════════════════════════════════════════════════════════════
 
-const GEMINI_MODEL = 'gemini-3.6-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 const GEMINI_PROMPT = `You are an expert digital speech-language pathologist and mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
 
-Task: Analyze the image and IDENTIFY EVERYTHING OR ANY OBJECT visible in the frame (e.g. door, pen, phone, cup, car, chair, table, window, shoe, shirt, dog, cat, person, book, wall, light, toy, fruit, food, appliance, etc.). Always identify the primary or most prominent object visible.
+Task: Look at the image and IMMEDIATELY IDENTIFY ANY main object, item, animal, person, food, furniture, tool, garment, or scene element visible.
 
 Strict Execution Rules:
-1. Universal Recognition: Recognize ANY item, object, animal, person, food, furniture, tool, garment, or scene element. Set "detected": true for every valid image.
-2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ).
+1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic.
+2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
 3. Full Diacritization (Mandatory Tashkeel): EVERY SINGLE Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween). This is CRITICAL for TTS pronunciation accuracy.
 4. Syllable/Phonetic Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
 5. Positive Encouragement: Provide a short, enthusiastic Arabic praise phrase (e.g., "أَحْسَنْتَ يَا بَطَل!", "رَائِعٌ يَا شَاطِر!", "مُمْتَازٌ يا ذَكِيّ!").
@@ -19,13 +18,26 @@ Strict Execution Rules:
 
 JSON Schema:
 {
-  "detected": true,
   "word": "بَابٌ",
   "phonics": "بَا - بٌ",
   "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
   "encouragement": "أَحْسَنْتَ يَا بَطَل!",
   "category": "أَثَاثٌ وَأَدَوَاتٌ"
 }`;
+
+// Default fallback 10 keys if env variable is not set
+const DEFAULT_KEYS = [
+  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
+  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
+  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
+  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
+  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
+  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
+  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
+  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
+  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
+  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
+];
 
 let currentKeyIndex = 0;
 
@@ -52,14 +64,9 @@ exports.handler = async function(event, context) {
     }
 
     const keysEnv = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
-    const keys = keysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0);
-
+    let keys = keysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0);
     if (keys.length === 0) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'لم يتم ضبط متغير GEMINI_API_KEYS في بيئة Netlify' })
-      };
+      keys = DEFAULT_KEYS;
     }
 
     let attempts = 0;
@@ -81,21 +88,9 @@ exports.handler = async function(event, context) {
               ]
             }],
             generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 350,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'OBJECT',
-                properties: {
-                  detected:      { type: 'BOOLEAN' },
-                  word:          { type: 'STRING' },
-                  phonics:       { type: 'STRING' },
-                  speech_text:   { type: 'STRING' },
-                  encouragement: { type: 'STRING' },
-                  category:      { type: 'STRING' }
-                },
-                required: ['detected']
-              }
+              temperature: 0.2,
+              maxOutputTokens: 300,
+              responseMimeType: 'application/json'
             }
           })
         });
@@ -122,7 +117,7 @@ exports.handler = async function(event, context) {
 
     const text = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
-      return { statusCode: 200, headers, body: JSON.stringify({ detected: false }) };
+      return { statusCode: 200, headers, body: JSON.stringify({ word: '' }) };
     }
 
     let parsed;
@@ -130,7 +125,7 @@ exports.handler = async function(event, context) {
       parsed = JSON.parse(text.trim());
     } catch {
       const match = text.match(/\{[\s\S]*?\}/);
-      parsed = match ? JSON.parse(match[0]) : { detected: false };
+      parsed = match ? JSON.parse(match[0]) : { word: '' };
     }
 
     return {

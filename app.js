@@ -1,18 +1,18 @@
 // ═══════════════════════════════════════════════════════════════
-// 🧠  رنيم — Main Application Logic (v4 — Optimized Vision Engine)
-// Real-time Camera → Optimized Canvas → Netlify/Gemini API → Arabic TTS
+// 🧠  رنيم — Main Application Logic (v5 — Super-Fast Vision Engine)
+// Real-time Camera → Fast Canvas → Gemini 1.5 Flash → Arabic TTS
 // ═══════════════════════════════════════════════════════════════
 
-const GEMINI_MODEL = 'gemini-3.6-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const GEMINI_PROMPT = `You are an expert digital speech-language pathologist and mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
 
-Task: Analyze the image and IDENTIFY EVERYTHING OR ANY OBJECT visible in the frame (e.g. door, pen, phone, cup, car, chair, table, window, shoe, shirt, dog, cat, person, book, wall, light, toy, fruit, food, appliance, etc.). Always identify the primary or most prominent object visible.
+Task: Look at the image and IMMEDIATELY IDENTIFY ANY main object, item, animal, person, food, furniture, tool, garment, or scene element visible.
 
 Strict Execution Rules:
-1. Universal Recognition: Recognize ANY item, object, animal, person, food, furniture, tool, garment, or scene element. Set "detected": true for every valid image.
-2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ).
+1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic.
+2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
 3. Full Diacritization (Mandatory Tashkeel): EVERY SINGLE Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween). This is CRITICAL for TTS pronunciation accuracy.
 4. Syllable/Phonetic Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
 5. Positive Encouragement: Provide a short, enthusiastic Arabic praise phrase (e.g., "أَحْسَنْتَ يَا بَطَل!", "رَائِعٌ يَا شَاطِر!", "مُمْتَازٌ يا ذَكِيّ!").
@@ -20,7 +20,6 @@ Strict Execution Rules:
 
 JSON Schema:
 {
-  "detected": true,
   "word": "بَابٌ",
   "phonics": "بَا - بٌ",
   "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
@@ -28,18 +27,18 @@ JSON Schema:
   "category": "أَثَاثٌ وَأَدَوَاتٌ"
 }`;
 
-// 🔑 Gemini API Keys Pool (Keys are securely loaded from Netlify Environment Variables: GEMINI_API_KEYS)
+// 🔑 10 Gemini API Keys Pool (Auto-Rotates on rate limit / quota)
 const API_KEYS = [
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  ""
+  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
+  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
+  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
+  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
+  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
+  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
+  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
+  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
+  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
+  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
 ];
 
 class RneemApp {
@@ -74,7 +73,7 @@ class RneemApp {
     this.autoDetectInterval = null;
     this.lastWord = '';
     this.lastDetectionTime = 0;
-    this.cooldownMs = 4500; // Cooldown between same word repetitions
+    this.cooldownMs = 4000;
 
     // Event Bindings
     this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
@@ -109,13 +108,12 @@ class RneemApp {
     const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
     if (validKeys.length > 1) {
       this.currentKeyIndex = (this.currentKeyIndex + 1) % validKeys.length;
-      console.log(`[Rneem] Rotated Gemini Key pool to index: ${this.currentKeyIndex}`);
+      console.log(`[Rneem] Rotated key index to: ${this.currentKeyIndex}`);
     }
   }
 
   // ── App Startup ──
   checkInitialState() {
-    // Show start welcome screen directly
     this.setupScreen.classList.add('hidden');
     this.permissionScreen.classList.remove('hidden');
   }
@@ -135,11 +133,9 @@ class RneemApp {
     this.setupScreen.classList.remove('hidden');
   }
 
-  // ── Load Microsoft Arabic Voices (Web Speech API Local — No Server API Required) ──
+  // ── Load Microsoft Arabic Voices (Web Speech API Local) ──
   loadVoices() {
     const voices = speechSynthesis.getVoices();
-
-    // Prioritize Microsoft Arabic voices (Naayf, Hoda, Salma, Shakir, Zariyah, Tarik)
     this.arabicVoice =
       voices.find(v => v.lang.startsWith('ar') && v.name.includes('Microsoft') && (v.name.includes('Naayf') || v.name.includes('Hoda') || v.name.includes('Salma') || v.name.includes('Shakir'))) ||
       voices.find(v => v.lang.startsWith('ar') && v.name.includes('Microsoft')) ||
@@ -148,7 +144,7 @@ class RneemApp {
       null;
 
     if (this.arabicVoice) {
-      console.log(`[Rneem] Selected Arabic Voice: ${this.arabicVoice.name} (${this.arabicVoice.lang})`);
+      console.log(`[Rneem] Selected Arabic Voice: ${this.arabicVoice.name}`);
     }
   }
 
@@ -226,7 +222,7 @@ class RneemApp {
     }
   }
 
-  // ── Optimized Frame Capture & Dual Engine (Netlify Proxy -> Client Direct Fallback) ──
+  // ── Optimized Ultra-Fast Vision Recognition Engine ──
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
 
@@ -238,8 +234,8 @@ class RneemApp {
     }
 
     try {
-      // 🚀 Performance Optimization: Scale canvas to max 640px width to reduce payload size by 8x!
-      const maxDim = 640;
+      // Scale canvas down to 512px max for lightning fast upload (< 20KB)
+      const maxDim = 512;
       let width = this.video.videoWidth || 640;
       let height = this.video.videoHeight || 480;
       if (width > maxDim) {
@@ -252,13 +248,11 @@ class RneemApp {
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(this.video, 0, 0, width, height);
-
-      // Fast JPEG encoding
-      const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      const base64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
 
       let result = null;
 
-      // 1. Primary Engine: Netlify Serverless Function (Hides API Keys, Secure & Fast)
+      // 1. Try Netlify Function Proxy First
       try {
         const netlifyRes = await fetch('/.netlify/functions/analyze', {
           method: 'POST',
@@ -268,22 +262,16 @@ class RneemApp {
 
         if (netlifyRes.ok) {
           result = await netlifyRes.json();
-        } else if (netlifyRes.status !== 404) {
-          const errBody = await netlifyRes.json().catch(() => ({}));
-          throw new Error(errBody.error || `خطأ الخادم (${netlifyRes.status})`);
         }
-      } catch (netlifyErr) {
-        // Fallback to client direct call if 404 (running on local dev without Netlify CLI)
-        if (netlifyErr.message && !netlifyErr.message.includes('404')) {
-          throw netlifyErr;
-        }
+      } catch (e) {
+        // Fallback to client call below
       }
 
-      // 2. Secondary Engine: Direct Client Fallback with 10 Key Pool Rotation
-      if (!result) {
+      // 2. Direct Gemini Call Fallback
+      if (!result || !result.word) {
         const apiKey = this.getApiKey();
         if (!apiKey) {
-          if (isManualClick) this.showError('يرجى ضبط مفاتيح Gemini API في ملف app.js أو Netlify');
+          if (isManualClick) this.showError('يرجى التأكد من مفاتيح Gemini API');
           return;
         }
 
@@ -305,21 +293,9 @@ class RneemApp {
                 ]
               }],
               generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: 350,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: 'OBJECT',
-                  properties: {
-                    detected:      { type: 'BOOLEAN' },
-                    word:          { type: 'STRING' },
-                    phonics:       { type: 'STRING' },
-                    speech_text:   { type: 'STRING' },
-                    encouragement: { type: 'STRING' },
-                    category:      { type: 'STRING' }
-                  },
-                  required: ['detected']
-                }
+                temperature: 0.2,
+                maxOutputTokens: 300,
+                responseMimeType: 'application/json'
               }
             })
           });
@@ -334,29 +310,25 @@ class RneemApp {
           }
         }
 
-        if (!response || !response.ok) {
-          const errData = await response?.json().catch(() => ({}));
-          throw new Error(errData?.error?.message || `خطأ في الاتصال (${response?.status || 'Network'})`);
-        }
-
-        const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) return;
-
-        try {
-          result = JSON.parse(text.trim());
-        } catch {
-          const match = text.match(/\{[\s\S]*?\}/);
-          if (!match) return;
-          result = JSON.parse(match[0]);
+        if (response && response.ok) {
+          const data = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            try {
+              result = JSON.parse(text.trim());
+            } catch {
+              const match = text.match(/\{[\s\S]*?\}/);
+              if (match) result = JSON.parse(match[0]);
+            }
+          }
         }
       }
 
-      if (!result || result.detected === false) {
+      if (!result || !result.word) {
         if (isManualClick) {
-          this.showError('لم نتمكن من تمييز شيء واضح. وجّه الكاميرا وثبّتها.');
+          this.showError('لم نتمكن من التمييز الدقيق. وجّه الكاميرا وثبّتها.');
         }
-        this.updateStatus('وجه الكاميرا وثبتها...', 'active');
+        this.updateStatus('وجه الكاميرا بثبات...', 'active');
         return;
       }
 
@@ -365,7 +337,7 @@ class RneemApp {
     } catch (err) {
       console.error('[Rneem] Recognition Error:', err);
       if (isManualClick) {
-        this.showError(err.message || 'حدث خطأ. حاول مرة أخرى.');
+        this.showError('حدث خطأ بالاتصال. حاول مرة أخرى.');
       }
     } finally {
       this.isAnalyzing = false;
@@ -374,14 +346,13 @@ class RneemApp {
     }
   }
 
-  // ── Handle Gemini Detection Result ──
+  // ── Handle Gemini Result ──
   handleResult(result) {
     const { word, phonics, speech_text, encouragement, category } = result;
 
-    if (!word || !speech_text) return;
+    if (!word) return;
 
     const now = Date.now();
-    // Cooldown check to prevent repeating same object continuously
     if (word === this.lastWord && (now - this.lastDetectionTime) < this.cooldownMs) {
       this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active');
       return;
@@ -392,13 +363,13 @@ class RneemApp {
 
     this.updateStatus('تَمَّ التَّعَرُّفُ!', 'detected');
 
-    // Visual Flash Animation
     this.detectedHighlight.classList.remove('flash');
     void this.detectedHighlight.offsetWidth;
     this.detectedHighlight.classList.add('flash');
 
-    // Split speech_text by periods for natural sequential vocal pauses
-    const ttsParts = speech_text
+    const rawSpeech = speech_text || `${word}. ${phonics || word}. ${encouragement || 'أَحْسَنْتَ يَا بَطَل!'}`;
+
+    const ttsParts = rawSpeech
       .split(/\.\s*/)
       .map(s => s.trim())
       .filter(s => s.length > 0);
@@ -408,7 +379,7 @@ class RneemApp {
       phonics: phonics || word,
       encouragement: encouragement || 'أَحْسَنْتَ يَا بَطَل!',
       category: category || '',
-      speechText: speech_text,
+      speechText: rawSpeech,
       ttsParts
     };
 
@@ -438,7 +409,7 @@ class RneemApp {
     this.resultCard.classList.add('visible');
   }
 
-  // ── High Precision Sequential TTS Engine ──
+  // ── High Precision Sequential Speech Synthesis ──
   speakSequential(parts) {
     speechSynthesis.cancel();
     this.isSpeaking = true;
@@ -460,12 +431,12 @@ class RneemApp {
       utterance.lang = 'ar-SA';
 
       if (index === 0) {
-        utterance.rate = 0.85;     // Main word identification — normal rate
+        utterance.rate = 0.85;
       } else if (index === 1) {
-        utterance.rate = 0.55;     // Phonics breakdown — slow & deliberate
+        utterance.rate = 0.55;
         utterance.pitch = 1.0;
       } else {
-        utterance.rate = 0.95;     // Pediatric encouragement — cheerful & upbeat
+        utterance.rate = 0.95;
         utterance.pitch = 1.15;
       }
 
@@ -473,8 +444,8 @@ class RneemApp {
         utterance.voice = this.arabicVoice;
       }
 
-      utterance.onend = () => setTimeout(speakNext, 450);
-      utterance.onerror = () => setTimeout(speakNext, 200);
+      utterance.onend = () => setTimeout(speakNext, 400);
+      utterance.onerror = () => setTimeout(speakNext, 150);
 
       index++;
       speechSynthesis.speak(utterance);
@@ -497,7 +468,7 @@ class RneemApp {
         if (!this.isAnalyzing && !this.isSpeaking) {
           this.captureAndAnalyze(false);
         }
-      }, 3000); // 3 seconds interval for smooth real-time monitoring
+      }, 3000);
     } else {
       clearInterval(this.autoDetectInterval);
       this.autoDetectInterval = null;
