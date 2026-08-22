@@ -36,6 +36,20 @@ JSON Schema (When Blurred or Moving):
   "detected": false
 }`;
 
+// 🔑 10 Gemini API Keys Array (Rotates automatically on quota/rate-limit)
+const API_KEYS = [
+  "", // المفتاح 1
+  "", // المفتاح 2
+  "", // المفتاح 3
+  "", // المفتاح 4
+  "", // المفتاح 5
+  "", // المفتاح 6
+  "", // المفتاح 7
+  "", // المفتاح 8
+  "", // المفتاح 9
+  ""  // المفتاح 10
+];
+
 class RneemApp {
   constructor() {
     // DOM
@@ -57,7 +71,8 @@ class RneemApp {
     this.detectedHighlight = document.getElementById('detected-highlight');
 
     // State
-    this.apiKey = localStorage.getItem('rneem_api_key') || '';
+    this.currentKeyIndex = 0;
+    this.customApiKey = localStorage.getItem('rneem_api_key') || '';
     this.stream = null;
     this.facingMode = 'environment';
     this.isSpeaking = false;
@@ -78,7 +93,7 @@ class RneemApp {
     this.autoToggle.addEventListener('change', () => this.toggleAutoDetect());
     this.changeKeyBtn.addEventListener('click', () => this.showSetupScreen());
 
-    // Load voices
+    // Load Microsoft Arabic Voice
     this.loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = () => this.loadVoices();
@@ -88,43 +103,64 @@ class RneemApp {
     this.checkInitialState();
   }
 
-  // ── Check if API key exists ──
-  checkInitialState() {
-    if (this.apiKey) {
-      this.setupScreen.classList.add('hidden');
-      this.permissionScreen.classList.remove('hidden');
+  // ── Get Active API Key with fallback & rotation ──
+  getApiKey() {
+    if (this.customApiKey) return this.customApiKey;
+    const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+    if (validKeys.length > 0) {
+      return validKeys[this.currentKeyIndex % validKeys.length];
+    }
+    return '';
+  }
+
+  rotateKey() {
+    const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+    if (validKeys.length > 1) {
+      this.currentKeyIndex = (this.currentKeyIndex + 1) % validKeys.length;
+      console.log(`Rotated API Key to index ${this.currentKeyIndex}`);
     }
   }
 
-  // ── Save API Key ──
+  // ── Initial State: Start directly on permission screen ──
+  checkInitialState() {
+    // Directly show welcome / start screen without setup prompt modal
+    this.setupScreen.classList.add('hidden');
+    this.permissionScreen.classList.remove('hidden');
+  }
+
+  // ── Save Custom API Key (Optional) ──
   saveApiKey() {
     const key = this.apiKeyInput.value.trim();
-    if (!key) {
-      this.showError('الرَّجَاءُ إِدْخَالُ مِفْتَاحِ API');
-      return;
+    if (key) {
+      this.customApiKey = key;
+      localStorage.setItem('rneem_api_key', key);
     }
-    this.apiKey = key;
-    localStorage.setItem('rneem_api_key', key);
     this.setupScreen.classList.add('hidden');
     this.permissionScreen.classList.remove('hidden');
   }
 
   showSetupScreen() {
-    this.apiKeyInput.value = this.apiKey;
+    this.apiKeyInput.value = this.customApiKey || this.getApiKey();
     this.setupScreen.classList.remove('hidden');
   }
 
-  // ── Load Arabic Voice ──
+  // ── Load Microsoft Arabic Voice (Web Speech API — No Key Required) ──
   loadVoices() {
     const voices = speechSynthesis.getVoices();
-    const preferred = ['Naayf', 'Hoda', 'Google', 'Microsoft', 'Apple'];
+
+    // Priority 1: Microsoft Natural Arabic Voices (Naayf, Hoda, Salma, Shakir, Zariyah, Hamed, Tarik)
+    // Priority 2: Any Microsoft Arabic Voice
+    // Priority 3: Google / Apple Arabic Voice
+    // Priority 4: Any browser Arabic Voice
     this.arabicVoice =
-      voices.find(v => v.lang.startsWith('ar') && preferred.some(p => v.name.includes(p))) ||
+      voices.find(v => v.lang.startsWith('ar') && v.name.includes('Microsoft') && (v.name.includes('Naayf') || v.name.includes('Hoda') || v.name.includes('Salma') || v.name.includes('Shakir'))) ||
+      voices.find(v => v.lang.startsWith('ar') && v.name.includes('Microsoft')) ||
+      voices.find(v => v.lang.startsWith('ar') && (v.name.includes('Google') || v.name.includes('Apple'))) ||
       voices.find(v => v.lang.startsWith('ar')) ||
       null;
 
     if (this.arabicVoice) {
-      console.log('Arabic voice loaded:', this.arabicVoice.name);
+      console.log('Arabic TTS Voice Selected:', this.arabicVoice.name, '| Lang:', this.arabicVoice.lang);
     }
   }
 
@@ -166,7 +202,6 @@ class RneemApp {
       this.permissionScreen.classList.add('hidden');
       this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active');
 
-      // Enable auto-detect by default when camera starts
       if (!this.autoToggle.checked) {
         this.autoToggle.checked = true;
       }
@@ -191,9 +226,15 @@ class RneemApp {
     }
   }
 
-  // ── Capture Frame → Gemini ──
+  // ── Capture Frame → Gemini API (Auto-rotate key on 429/Error) ──
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
+
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      if (isManualClick) this.showError('يرجى إضافة مفاتيح API في ملف app.js');
+      return;
+    }
 
     this.isAnalyzing = true;
     this.captureBtn.classList.add('analyzing');
@@ -203,54 +244,66 @@ class RneemApp {
     }
 
     try {
-      // Capture frame as base64 JPEG
       const canvas = document.createElement('canvas');
       canvas.width = this.video.videoWidth || 640;
       canvas.height = this.video.videoHeight || 480;
       canvas.getContext('2d').drawImage(this.video, 0, 0);
       const base64 = canvas.toDataURL('image/jpeg', 0.82).split(',')[1];
 
-      // Call Gemini
-      const response = await fetch(`${GEMINI_ENDPOINT}?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: GEMINI_PROMPT },
-              { inline_data: { mime_type: 'image/jpeg', data: base64 } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 350,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                detected:      { type: 'BOOLEAN' },
-                word:          { type: 'STRING' },
-                phonics:       { type: 'STRING' },
-                speech_text:   { type: 'STRING' },
-                encouragement: { type: 'STRING' },
-                category:      { type: 'STRING' }
-              },
-              required: ['detected']
-            }
-          }
-        })
-      });
+      let attempts = 0;
+      let response = null;
+      const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+      const maxAttempts = validKeys.length > 0 ? validKeys.length : 1;
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        if (response.status === 400 || response.status === 403) {
-          throw new Error('مفتاح API غير صالح. تأكد من المفتاح.');
+      while (attempts < maxAttempts) {
+        const currentKey = this.getApiKey();
+        response = await fetch(`${GEMINI_ENDPOINT}?key=${currentKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: GEMINI_PROMPT },
+                { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 350,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'OBJECT',
+                properties: {
+                  detected:      { type: 'BOOLEAN' },
+                  word:          { type: 'STRING' },
+                  phonics:       { type: 'STRING' },
+                  speech_text:   { type: 'STRING' },
+                  encouragement: { type: 'STRING' },
+                  category:      { type: 'STRING' }
+                },
+                required: ['detected']
+              }
+            }
+          })
+        });
+
+        if (response.ok) {
+          break; // Success!
         }
-        if (response.status === 429) {
-          if (isManualClick) this.showError('تم تجاوز الحد المسموح. انتظر قليلاً.');
-          return;
+
+        // If rate limit or quota error, rotate key and retry
+        if (response.status === 429 || response.status === 403) {
+          console.warn(`Key rate limited (status ${response.status}), rotating key...`);
+          this.rotateKey();
+          attempts++;
+        } else {
+          break;
         }
-        throw new Error(errData?.error?.message || `خطأ ${response.status}`);
+      }
+
+      if (!response || !response.ok) {
+        const errData = await response?.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `خطأ في الاتصال (${response?.status || 'Network'})`);
       }
 
       const data = await response.json();
