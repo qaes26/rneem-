@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="رنيم — تطبيق تعليم النطق للأطفال بالذكاء الاصطناعي. وجّه الكاميرا واسمع الكلمة بالعربية!">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>رنيم — مُعَلِّمُ النُّطْقِ الذَّكِيّ</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎯</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Particles -->
+  <div class="bg-particles" id="bg-particles"></div>
+
+  <!-- API Key Setup Screen -->
+  <div class="setup-screen" id="setup-screen">
+    <div class="setup-card">
+      <div class="setup-card__icon">🔑</div>
+      <h1 class="setup-card__title">إِعْدَادُ رنيم</h1>
+      <p class="setup-card__text">
+        نَحْتَاجُ مِفْتَاحَ Gemini API لِلتَّعَرُّفِ عَلَى الأَشْيَاء.
+      </p>
+      <a href="https://aistudio.google.com/apikey" target="_blank" class="setup-card__link">
+        🌐 اِحْصَلْ عَلَى مِفْتَاحٍ مَجَّانِيّ مِنْ Google AI Studio
+      </a>
+      <div class="setup-card__input-group">
+        <input 
+          type="text" 
+          id="api-key-input" 
+          class="setup-card__input" 
+          placeholder="اِلْصَقْ مِفْتَاحَ API هُنَا..."
+          dir="ltr"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button class="btn btn--primary" id="save-key-btn">
+          <span class="btn__icon">✅</span>
+          حِفْظٌ وَبَدْء
+        </button>
+      </div>
+      <p class="setup-card__note">
+        المِفْتَاحُ يُحْفَظُ فَقَطْ عَلَى جِهَازِكَ وَلَا يُرْسَلُ لِأَيِّ مَكَانٍ آخَر.
+      </p>
+    </div>
+  </div>
+
+  <!-- Permission Screen -->
+  <div class="permission-screen hidden" id="permission-screen">
+    <div class="permission-screen__icon">📸</div>
+    <h1 class="permission-screen__title">مَرْحَبًا بِكَ فِي رنيم!</h1>
+    <p class="permission-screen__text">
+      وَجِّهْ الكَامِيرَا عَلَى أَيِّ شَيْءٍ<br>وَسَأُخْبِرُكَ بِاسْمِهِ بِالعَرَبِيَّة!
+    </p>
+    <button class="btn btn--primary" id="start-btn">
+      <span class="btn__icon">🚀</span>
+      اِبْدَأ الآن!
+    </button>
+  </div>
+
+  <!-- Main App -->
+  <div class="app">
+
+    <header class="header">
+      <h1 class="header__logo">رنيم</h1>
+      <p class="header__subtitle">مُعَلِّمُ النُّطْقِ الذَّكِيّ</p>
+    </header>
+
+    <!-- Camera -->
+    <div class="camera-container">
+      <video id="camera-feed" autoplay playsinline muted></video>
+
+      <div class="scan-line"></div>
+      <div class="camera-corners"><span></span></div>
+      <div class="detected-highlight" id="detected-highlight"></div>
+
+      <!-- Status -->
+      <div class="status-badge" id="status-badge">
+        <div class="status-dot"></div>
+        <span id="status-text">جَارٍ التَّحْضِير...</span>
+      </div>
+
+      <!-- Camera Switch -->
+      <button class="camera-switch-btn" id="camera-switch-btn" title="تَبْدِيلُ الكَامِيرَا">🔄</button>
+
+      <!-- Capture Button (main interaction) -->
+      <button class="capture-btn" id="capture-btn" title="اِلْتَقِط صُورَة">
+        <div class="capture-btn__ring"></div>
+        <div class="capture-btn__inner">📷</div>
+      </button>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay hidden" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">
+          جَارٍ التَّعَرُّفُ عَلَى الشَّيْء...
+          <span>اِنْتَظِرْ لَحْظَة</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto-detect toggle -->
+    <div class="auto-detect-row">
+      <label class="toggle-label" for="auto-toggle">
+        <span>التَّعَرُّفُ التِّلْقَائِيّ</span>
+        <input type="checkbox" id="auto-toggle" class="toggle-input">
+        <span class="toggle-switch"></span>
+      </label>
+      <button class="btn-icon" id="change-key-btn" title="تغيير مفتاح API">⚙️</button>
+    </div>
+
+    <!-- Result Card -->
+    <div class="result-card visible" id="result-card">
+      <div class="result-card__empty">
+        <div class="result-card__empty-icon">🔍</div>
+        <p class="result-card__empty-text">
+          اِضْغَطْ زِرَّ الكَامِيرَا 📷<br>لِلتَّعَرُّفِ عَلَى الشَّيْء!
+        </p>
+      </div>
+    </div>
+
+    <footer class="footer">
+      رنيم — تَطْبِيقُ تَعْلِيمِ النُّطْقِ لِلأَطْفَال 🌟
+    </footer>
+  </div>
+
+  <!-- Error Toast -->
+  <div class="error-toast" id="error-toast"></div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+
+</body>
+</html>
