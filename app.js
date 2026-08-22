@@ -36,18 +36,18 @@ JSON Schema (When Blurred or Moving):
   "detected": false
 }`;
 
-// 🔑 10 Gemini API Keys Pool (Auto-Rotates on rate limit / quota)
+// 🔑 Gemini API Keys Pool (Keys are securely loaded from Netlify Environment Variables: GEMINI_API_KEYS)
 const API_KEYS = [
-  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
-  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
-  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
-  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
-  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
-  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
-  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
-  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
-  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
-  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  ""
 ];
 
 class RneemApp {
