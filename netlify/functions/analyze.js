@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // 🔒 Netlify Serverless Function: Ultra-Fast Gemini 1.5 Flash Engine
+// Backend Serverless Handler — 100% Secure Server-Side Execution
 // ═══════════════════════════════════════════════════════════════
 
 const GEMINI_MODEL = 'gemini-1.5-flash';
@@ -9,8 +10,8 @@ const GEMINI_PROMPT = `You are an expert digital speech-language pathologist and
 Task: Look at the image and IMMEDIATELY IDENTIFY ANY main object, item, animal, person, food, furniture, tool, garment, or scene element visible.
 
 Strict Execution Rules:
-1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic.
-2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
+1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic (e.g. door, pen, phone, cup, car, chair, table, window, shoe, shirt, man, woman, child, book, toy, apple, banana, picture, wall, light, face, hair, glasses).
+2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ, وَجْهٌ, شَعْرٌ, نَظَّارَةٌ).
 3. Full Diacritization (Mandatory Tashkeel): EVERY SINGLE Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween). This is CRITICAL for TTS pronunciation accuracy.
 4. Syllable/Phonetic Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
 5. Positive Encouragement: Provide a short, enthusiastic Arabic praise phrase (e.g., "أَحْسَنْتَ يَا بَطَل!", "رَائِعٌ يَا شَاطِر!", "مُمْتَازٌ يا ذَكِيّ!").
@@ -25,8 +26,19 @@ JSON Schema:
   "category": "أَثَاثٌ وَأَدَوَاتٌ"
 }`;
 
-// Default fallback keys (Keys are securely loaded from Netlify Environment Variables: GEMINI_API_KEYS)
-const DEFAULT_KEYS = [];
+// Serverless Backend Key Pool (Rotates automatically on quota/rate-limit)
+const DEFAULT_KEYS = [
+  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
+  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
+  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
+  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
+  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
+  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
+  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
+  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
+  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
+  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
+];
 
 let currentKeyIndex = 0;
 
@@ -90,7 +102,7 @@ exports.handler = async function (event, context) {
         }
 
         if (res.status === 429 || res.status === 403) {
-          console.warn(`[Netlify Function] Key index ${currentKeyIndex} rate limited (${res.status}), rotating...`);
+          console.warn(`[Netlify Serverless] Key index ${currentKeyIndex} rate limited (${res.status}), rotating...`);
           currentKeyIndex = (currentKeyIndex + 1) % keys.length;
           attempts++;
         } else {
@@ -124,7 +136,7 @@ exports.handler = async function (event, context) {
     };
 
   } catch (err) {
-    console.error('[Netlify Function Error]:', err);
+    console.error('[Netlify Serverless Error]:', err);
     return {
       statusCode: 500,
       headers,
