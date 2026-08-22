@@ -7,26 +7,25 @@
 const GROQ_MODEL = 'llama-3.2-11b-vision-preview';
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
-const SYSTEM_VISION_PROMPT = `You are an expert digital speech-language pathologist and real-time mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
+const SYSTEM_VISION_PROMPT = `Look at the main object in the image and identify what it is. You MUST respond with a JSON object in Modern Standard Arabic.
 
-Task: Identify the primary central object visible in the image (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
-
-Execution Rules:
-1. Identify the primary object as a simple singular noun in Modern Standard Arabic.
-2. Full Diacritization (Mandatory Tashkeel): EVERY Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween).
-3. Syllable Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
-4. Speech Sentence: Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and encouragement.
-5. Return JSON ONLY with NO additional text or markdown.
+Rules:
+1. Identify ANY visible item, object, face, person, clothing, furniture, bottle, cup, phone, door, car, book, wall, window, key, tool, toy, food, animal, etc.
+2. Provide the word in Modern Standard Arabic with full diacritics (tashkeel).
+3. "word": The singular Arabic noun with diacritics (e.g., "كُوبٌ", "قَلَمٌ", "هَاتِفٌ", "بَابٌ", "وَجْهٌ", "كُرْسِيٌّ", "قَمِيصٌ", "كِتَابٌ", "زُجَاجَةٌ").
+4. "phonics": Phonetic syllables separated by hyphens (e.g., "كُو - بٌ", "قَـ - لَـ - مٌ").
+5. "speech_text": Full sentence starting with "هَذَا" or "هَذِهِ" (e.g., "هَذَا كُوبٌ. كُو - بٌ. أَحْسَنْتَ يَا بَطَل!").
+6. "encouragement": Enthusiastic praise (e.g., "أَحْسَنْتَ يَا بَطَل!").
 
 JSON Output Schema:
 {
-  "word": "بَابٌ",
-  "phonics": "بَا - بٌ",
-  "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
+  "word": "كُوبٌ",
+  "phonics": "كُو - بٌ",
+  "speech_text": "هَذَا كُوبٌ. كُو - بٌ. أَحْسَنْتَ يَا بَطَل!",
   "encouragement": "أَحْسَنْتَ يَا بَطَل!"
 }`;
 
-// Serverless Backend Key Pool (Keys are loaded from Netlify Environment Variables: GROQ_API_KEYS)
+// Serverless Backend Key Pool (Loaded from Netlify Environment Variables: GROQ_API_KEYS)
 const DEFAULT_GROQ_KEYS = [
   "",
   "",
@@ -61,13 +60,16 @@ exports.handler = async function (event, context) {
       keys = DEFAULT_GROQ_KEYS;
     }
 
-    // Pick a random starting index for load balancing across devices
     let startIndex = Math.floor(Math.random() * keys.length);
     let attempts = 0;
     let groqResponseData = null;
 
     while (attempts < keys.length) {
       const apiKey = keys[(startIndex + attempts) % keys.length];
+      if (!apiKey) {
+        attempts++;
+        continue;
+      }
 
       try {
         const res = await fetch(GROQ_ENDPOINT, {
@@ -101,7 +103,6 @@ exports.handler = async function (event, context) {
           break;
         }
 
-        // On 429 Rate Limit or 403/503, rotate to next key silently
         if (res.status === 429 || res.status === 403 || res.status === 503) {
           console.warn(`[Groq Serverless] Key index ${(startIndex + attempts) % keys.length} rate limited (${res.status}), trying next key...`);
           attempts++;
@@ -127,6 +128,19 @@ exports.handler = async function (event, context) {
     } catch {
       const match = contentText.match(/\{[\s\S]*?\}/);
       parsed = match ? JSON.parse(match[0]) : { word: '' };
+    }
+
+    if (parsed) {
+      const rawWord = parsed.word || parsed.name || parsed.object || parsed.item || '';
+      if (rawWord) {
+        const word = rawWord.trim();
+        const phonics = parsed.phonics || word;
+        const encouragement = parsed.encouragement || 'أَحْسَنْتَ يَا بَطَل!';
+        const demonstrative = (word.endsWith('ة') || word.endsWith('ـة') || word.endsWith('اء')) ? 'هَذِهِ' : 'هَذَا';
+        const speech_text = parsed.speech_text || `${demonstrative} ${word}. ${phonics}. ${encouragement}`;
+
+        parsed = { word, phonics, speech_text, encouragement, category: parsed.category || '' };
+      }
     }
 
     return {

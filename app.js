@@ -6,26 +6,25 @@
 const GROQ_MODEL = 'llama-3.2-11b-vision-preview';
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
-const SYSTEM_VISION_PROMPT = `You are an expert digital speech-language pathologist and real-time mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
+const SYSTEM_VISION_PROMPT = `Look at the main object in the image and identify what it is. You MUST respond with a JSON object in Modern Standard Arabic.
 
-Task: Identify the primary central object visible in the image (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
-
-Execution Rules:
-1. Identify the primary object as a simple singular noun in Modern Standard Arabic.
-2. Full Diacritization (Mandatory Tashkeel): EVERY Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween).
-3. Syllable Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
-4. Speech Sentence: Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and encouragement.
-5. Return JSON ONLY with NO additional text.
+Rules:
+1. Identify ANY visible item, object, face, person, clothing, furniture, bottle, cup, phone, door, car, book, wall, window, key, tool, toy, food, animal, etc.
+2. Provide the word in Modern Standard Arabic with full diacritics (tashkeel).
+3. "word": The singular Arabic noun with diacritics (e.g., "كُوبٌ", "قَلَمٌ", "هَاتِفٌ", "بَابٌ", "وَجْهٌ", "كُرْسِيٌّ", "قَمِيصٌ", "كِتَابٌ", "زُجَاجَةٌ").
+4. "phonics": Phonetic syllables separated by hyphens (e.g., "كُو - بٌ", "قَـ - لَـ - مٌ").
+5. "speech_text": Full sentence starting with "هَذَا" or "هَذِهِ" (e.g., "هَذَا كُوبٌ. كُو - بٌ. أَحْسَنْتَ يَا بَطَل!").
+6. "encouragement": Enthusiastic praise (e.g., "أَحْسَنْتَ يَا بَطَل!").
 
 JSON Output Schema:
 {
-  "word": "بَابٌ",
-  "phonics": "بَا - بٌ",
-  "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
+  "word": "كُوبٌ",
+  "phonics": "كُو - بٌ",
+  "speech_text": "هَذَا كُوبٌ. كُو - بٌ. أَحْسَنْتَ يَا بَطَل!",
   "encouragement": "أَحْسَنْتَ يَا بَطَل!"
 }`;
 
-// 🔑 Groq API Keys Pool (Keys are loaded from config.js locally or Netlify Environment Variables: GROQ_API_KEYS)
+// 🔑 Groq API Keys Pool (Loaded from config.js locally or Netlify Environment Variables: GROQ_API_KEYS)
 const GROQ_API_KEYS = [
   "",
   "",
@@ -94,17 +93,10 @@ class RneemApp {
     return merged.filter(k => k && k.trim().length > 0);
   }
 
-  getRandomKey(pool) {
-    if (!pool || pool.length === 0) return '';
-    const randomIndex = Math.floor(Math.random() * pool.length);
-    return pool[randomIndex];
-  }
-
   // ── Anti-Spam / Debounce Protection (2 Seconds Delay) ──
   handleManualCapture() {
     if (this.isDebounced || this.isAnalyzing || this.isSpeaking) return;
 
-    // Trigger 2-Second Debounce Protection
     this.isDebounced = true;
     this.captureBtn.disabled = true;
     this.captureBtn.style.opacity = '0.5';
@@ -234,7 +226,6 @@ class RneemApp {
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
 
-    // Verify video stream readiness
     if (!this.video || this.video.readyState < 2 || !this.video.videoWidth) {
       if (isManualClick) this.showError('الكاميرا غير جاهزة بعد. انتظر ثانية...');
       return;
@@ -248,8 +239,8 @@ class RneemApp {
     }
 
     try {
-      // Scale canvas down to 512px max for ultra-lightweight payload (< 15KB)
-      const maxDim = 512;
+      // Scale canvas down to max 640px for clean clarity
+      const maxDim = 640;
       let width = this.video.videoWidth || 640;
       let height = this.video.videoHeight || 480;
       if (width > maxDim) {
@@ -262,7 +253,7 @@ class RneemApp {
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(this.video, 0, 0, width, height);
-      const base64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+      const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
       let result = null;
 
@@ -289,7 +280,6 @@ class RneemApp {
           return;
         }
 
-        // Random starting index for device load balancing
         let startIndex = Math.floor(Math.random() * keyPool.length);
         let attempts = 0;
         let response = null;
@@ -326,7 +316,6 @@ class RneemApp {
 
             if (response.ok) break;
 
-            // Auto-rotate silently on 429 Rate Limit
             if (response.status === 429 || response.status === 403 || response.status === 503) {
               console.warn(`[Groq Client] Key index ${(startIndex + attempts) % keyPool.length} rate limited (${response.status}), trying next key...`);
               attempts++;
@@ -349,6 +338,20 @@ class RneemApp {
               if (match) result = JSON.parse(match[0]);
             }
           }
+        }
+      }
+
+      // Robust Response Post-Processor
+      if (result) {
+        const rawWord = result.word || result.name || result.object || result.item || '';
+        if (rawWord) {
+          const word = rawWord.trim();
+          const phonics = result.phonics || word;
+          const encouragement = result.encouragement || 'أَحْسَنْتَ يَا بَطَل!';
+          const demonstrative = (word.endsWith('ة') || word.endsWith('ـة') || word.endsWith('اء')) ? 'هَذِهِ' : 'هَذَا';
+          const speech_text = result.speech_text || `${demonstrative} ${word}. ${phonics}. ${encouragement}`;
+
+          result = { word, phonics, speech_text, encouragement, category: result.category || '' };
         }
       }
 
@@ -465,7 +468,6 @@ class RneemApp {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ar-SA';
 
-      // 🎯 Slow rate = 0.75 as requested for clear pediatric pronunciation
       utterance.rate = 0.75;
       utterance.pitch = index === 1 ? 1.0 : 1.1;
 
