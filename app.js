@@ -60,6 +60,7 @@ class RneemApp {
     this.changeKeyBtn = document.getElementById('change-key-btn');
     this.errorToast = document.getElementById('error-toast');
     this.detectedHighlight = document.getElementById('detected-highlight');
+    this.targetBox = document.getElementById('target-box');
 
     // App State
     this.currentKeyIndex = 0;
@@ -364,6 +365,13 @@ class RneemApp {
     this.lastDetectionTime = now;
 
     this.updateStatus('تَمَّ التَّعَرُّفُ!', 'detected');
+
+    if (this.targetBox) {
+      this.targetBox.classList.remove('detected');
+      void this.targetBox.offsetWidth;
+      this.targetBox.classList.add('detected');
+      setTimeout(() => this.targetBox.classList.remove('detected'), 2200);
+    }
 
     this.detectedHighlight.classList.remove('flash');
     void this.detectedHighlight.offsetWidth;
