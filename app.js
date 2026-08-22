@@ -38,16 +38,16 @@ JSON Schema (When Blurred or Moving):
 
 // 🔑 10 Gemini API Keys Array (Rotates automatically on quota/rate-limit)
 const API_KEYS = [
-  "", // المفتاح 1
-  "", // المفتاح 2
-  "", // المفتاح 3
-  "", // المفتاح 4
-  "", // المفتاح 5
-  "", // المفتاح 6
-  "", // المفتاح 7
-  "", // المفتاح 8
-  "", // المفتاح 9
-  ""  // المفتاح 10
+  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
+  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
+  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
+  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
+  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
+  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
+  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
+  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
+  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
+  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
 ];
 
 class RneemApp {
@@ -299,12 +299,12 @@ class RneemApp {
                 responseSchema: {
                   type: 'OBJECT',
                   properties: {
-                    detected:      { type: 'BOOLEAN' },
-                    word:          { type: 'STRING' },
-                    phonics:       { type: 'STRING' },
-                    speech_text:   { type: 'STRING' },
+                    detected: { type: 'BOOLEAN' },
+                    word: { type: 'STRING' },
+                    phonics: { type: 'STRING' },
+                    speech_text: { type: 'STRING' },
                     encouragement: { type: 'STRING' },
-                    category:      { type: 'STRING' }
+                    category: { type: 'STRING' }
                   },
                   required: ['detected']
                 }
@@ -359,55 +359,55 @@ class RneemApp {
       this.isAnalyzing = false;
       this.captureBtn.classList.remove('analyzing');
       this.loadingOverlay.classList.add('hidden');
-  }
-
-  // ── Handle Gemini Result ──
-  handleResult(result) {
-    const { word, phonics, speech_text, encouragement, category } = result;
-
-    if (!word || !speech_text) return;
-
-    const now = Date.now();
-    // Cooldown check for same word in real-time auto-capture
-    if (word === this.lastWord && (now - this.lastDetectionTime) < this.cooldownMs) {
-      this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active');
-      return;
     }
 
-    this.lastWord = word;
-    this.lastDetectionTime = now;
+    // ── Handle Gemini Result ──
+    handleResult(result) {
+      const { word, phonics, speech_text, encouragement, category } = result;
 
-    this.updateStatus('تَمَّ التَّعَرُّفُ!', 'detected');
+      if (!word || !speech_text) return;
 
-    // Flash effect
-    this.detectedHighlight.classList.remove('flash');
-    void this.detectedHighlight.offsetWidth;
-    this.detectedHighlight.classList.add('flash');
+      const now = Date.now();
+      // Cooldown check for same word in real-time auto-capture
+      if (word === this.lastWord && (now - this.lastDetectionTime) < this.cooldownMs) {
+        this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active');
+        return;
+      }
 
-    // Split speech_text by periods for sequential TTS
-    const ttsParts = speech_text
-      .split(/\.\s*/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+      this.lastWord = word;
+      this.lastDetectionTime = now;
 
-    this.currentSpeechData = {
-      word,
-      phonics: phonics || word,
-      encouragement: encouragement || 'أَحْسَنْتَ يَا بَطَل!',
-      category: category || '',
-      speechText: speech_text,
-      ttsParts
-    };
+      this.updateStatus('تَمَّ التَّعَرُّفُ!', 'detected');
 
-    this.showResult(this.currentSpeechData);
-    this.speakSequential(this.currentSpeechData.ttsParts);
+      // Flash effect
+      this.detectedHighlight.classList.remove('flash');
+      void this.detectedHighlight.offsetWidth;
+      this.detectedHighlight.classList.add('flash');
 
-    setTimeout(() => this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active'), 2500);
-  }
+      // Split speech_text by periods for sequential TTS
+      const ttsParts = speech_text
+        .split(/\.\s*/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
 
-  // ── Show Result Card ──
-  showResult(data) {
-    this.resultCard.innerHTML = `
+      this.currentSpeechData = {
+        word,
+        phonics: phonics || word,
+        encouragement: encouragement || 'أَحْسَنْتَ يَا بَطَل!',
+        category: category || '',
+        speechText: speech_text,
+        ttsParts
+      };
+
+      this.showResult(this.currentSpeechData);
+      this.speakSequential(this.currentSpeechData.ttsParts);
+
+      setTimeout(() => this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active'), 2500);
+    }
+
+    // ── Show Result Card ──
+    showResult(data) {
+      this.resultCard.innerHTML = `
       <div class="word-display">
         <div class="word-display__main">${data.word}</div>
         <div class="word-display__phonics">${data.phonics}</div>
@@ -422,87 +422,87 @@ class RneemApp {
         </div>
       </div>
     `;
-    this.resultCard.classList.add('visible');
-  }
-
-  // ── Sequential TTS ──
-  speakSequential(parts) {
-    speechSynthesis.cancel();
-    this.isSpeaking = true;
-
-    const btn = document.getElementById('repeat-btn');
-    if (btn) btn.classList.add('speaking');
-
-    let index = 0;
-
-    const speakNext = () => {
-      if (index >= parts.length) {
-        this.isSpeaking = false;
-        if (btn) btn.classList.remove('speaking');
-        return;
-      }
-
-      const text = parts[index];
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ar-SA';
-
-      if (index === 0) {
-        utterance.rate = 0.85;     // Word — normal
-      } else if (index === 1) {
-        utterance.rate = 0.55;     // Phonics — very slow
-        utterance.pitch = 1.0;
-      } else {
-        utterance.rate = 0.95;     // Encouragement — upbeat
-        utterance.pitch = 1.15;
-      }
-
-      if (this.arabicVoice) utterance.voice = this.arabicVoice;
-
-      utterance.onend = () => setTimeout(speakNext, 500);
-      utterance.onerror = () => setTimeout(speakNext, 200);
-
-      index++;
-      speechSynthesis.speak(utterance);
-    };
-
-    speakNext();
-  }
-
-  repeatCurrent() {
-    if (this.currentSpeechData) {
-      this.speakSequential(this.currentSpeechData.ttsParts);
+      this.resultCard.classList.add('visible');
     }
-  }
 
-  // ── Auto-detect Toggle ──
-  toggleAutoDetect() {
-    if (this.autoToggle.checked) {
-      if (this.autoDetectInterval) clearInterval(this.autoDetectInterval);
-      this.autoDetectInterval = setInterval(() => {
-        if (!this.isAnalyzing && !this.isSpeaking) {
-          this.captureAndAnalyze(false);
+    // ── Sequential TTS ──
+    speakSequential(parts) {
+      speechSynthesis.cancel();
+      this.isSpeaking = true;
+
+      const btn = document.getElementById('repeat-btn');
+      if (btn) btn.classList.add('speaking');
+
+      let index = 0;
+
+      const speakNext = () => {
+        if (index >= parts.length) {
+          this.isSpeaking = false;
+          if (btn) btn.classList.remove('speaking');
+          return;
         }
-      }, 3000); // every 3 seconds for real-time monitoring
-    } else {
-      clearInterval(this.autoDetectInterval);
-      this.autoDetectInterval = null;
+
+        const text = parts[index];
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-SA';
+
+        if (index === 0) {
+          utterance.rate = 0.85;     // Word — normal
+        } else if (index === 1) {
+          utterance.rate = 0.55;     // Phonics — very slow
+          utterance.pitch = 1.0;
+        } else {
+          utterance.rate = 0.95;     // Encouragement — upbeat
+          utterance.pitch = 1.15;
+        }
+
+        if (this.arabicVoice) utterance.voice = this.arabicVoice;
+
+        utterance.onend = () => setTimeout(speakNext, 500);
+        utterance.onerror = () => setTimeout(speakNext, 200);
+
+        index++;
+        speechSynthesis.speak(utterance);
+      };
+
+      speakNext();
+    }
+
+    repeatCurrent() {
+      if (this.currentSpeechData) {
+        this.speakSequential(this.currentSpeechData.ttsParts);
+      }
+    }
+
+    // ── Auto-detect Toggle ──
+    toggleAutoDetect() {
+      if (this.autoToggle.checked) {
+        if (this.autoDetectInterval) clearInterval(this.autoDetectInterval);
+        this.autoDetectInterval = setInterval(() => {
+          if (!this.isAnalyzing && !this.isSpeaking) {
+            this.captureAndAnalyze(false);
+          }
+        }, 3000); // every 3 seconds for real-time monitoring
+      } else {
+        clearInterval(this.autoDetectInterval);
+        this.autoDetectInterval = null;
+      }
+    }
+
+    // ── Status ──
+    updateStatus(text, state) {
+      this.statusText.textContent = text;
+      this.statusBadge.className = 'status-badge';
+      if (state) this.statusBadge.classList.add(state);
+    }
+
+    // ── Error ──
+    showError(msg) {
+      this.errorToast.textContent = msg;
+      this.errorToast.classList.add('visible');
+      setTimeout(() => this.errorToast.classList.remove('visible'), 5000);
     }
   }
-
-  // ── Status ──
-  updateStatus(text, state) {
-    this.statusText.textContent = text;
-    this.statusBadge.className = 'status-badge';
-    if (state) this.statusBadge.classList.add(state);
-  }
-
-  // ── Error ──
-  showError(msg) {
-    this.errorToast.textContent = msg;
-    this.errorToast.classList.add('visible');
-    setTimeout(() => this.errorToast.classList.remove('visible'), 5000);
-  }
-}
 
 // ── Init ──
 let app;
