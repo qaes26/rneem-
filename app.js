@@ -226,15 +226,9 @@ class RneemApp {
     }
   }
 
-  // ── Capture Frame → Gemini API (Auto-rotate key on 429/Error) ──
+  // ── Capture Frame → Netlify Function (Secure) or Direct API fallback ──
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
-
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      if (isManualClick) this.showError('يرجى إضافة مفاتيح API في ملف app.js');
-      return;
-    }
 
     this.isAnalyzing = true;
     this.captureBtn.classList.add('analyzing');
@@ -250,79 +244,103 @@ class RneemApp {
       canvas.getContext('2d').drawImage(this.video, 0, 0);
       const base64 = canvas.toDataURL('image/jpeg', 0.82).split(',')[1];
 
-      let attempts = 0;
-      let response = null;
-      const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
-      const maxAttempts = validKeys.length > 0 ? validKeys.length : 1;
+      let result = null;
 
-      while (attempts < maxAttempts) {
-        const currentKey = this.getApiKey();
-        response = await fetch(`${GEMINI_ENDPOINT}?key=${currentKey}`, {
+      // 1. Try Netlify Serverless Function first (Secure, keys in environment variables)
+      try {
+        const netlifyRes = await fetch('/.netlify/functions/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: GEMINI_PROMPT },
-                { inline_data: { mime_type: 'image/jpeg', data: base64 } }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 350,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'OBJECT',
-                properties: {
-                  detected:      { type: 'BOOLEAN' },
-                  word:          { type: 'STRING' },
-                  phonics:       { type: 'STRING' },
-                  speech_text:   { type: 'STRING' },
-                  encouragement: { type: 'STRING' },
-                  category:      { type: 'STRING' }
-                },
-                required: ['detected']
-              }
-            }
-          })
+          body: JSON.stringify({ image: base64 })
         });
 
-        if (response.ok) {
-          break; // Success!
+        if (netlifyRes.ok) {
+          result = await netlifyRes.json();
+        } else if (netlifyRes.status !== 404) {
+          const errBody = await netlifyRes.json().catch(() => ({}));
+          throw new Error(errBody.error || `خطأ الخادم (${netlifyRes.status})`);
+        }
+      } catch (netlifyErr) {
+        // If 404 (not running on Netlify), fallback to direct API call below
+        if (netlifyErr.message && !netlifyErr.message.includes('404')) {
+          throw netlifyErr;
+        }
+      }
+
+      // 2. Direct API Call Fallback (If not on Netlify or local testing with client keys)
+      if (!result) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+          if (isManualClick) this.showError('يرجى ضبط متغير GEMINI_API_KEYS في Netlify أو إضافة مفاتيح في app.js');
+          return;
         }
 
-        // If rate limit or quota error, rotate key and retry
-        if (response.status === 429 || response.status === 403) {
-          console.warn(`Key rate limited (status ${response.status}), rotating key...`);
-          this.rotateKey();
-          attempts++;
-        } else {
-          break;
+        let attempts = 0;
+        let response = null;
+        const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+        const maxAttempts = validKeys.length > 0 ? validKeys.length : 1;
+
+        while (attempts < maxAttempts) {
+          const currentKey = this.getApiKey();
+          response = await fetch(`${GEMINI_ENDPOINT}?key=${currentKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: GEMINI_PROMPT },
+                  { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 350,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: 'OBJECT',
+                  properties: {
+                    detected:      { type: 'BOOLEAN' },
+                    word:          { type: 'STRING' },
+                    phonics:       { type: 'STRING' },
+                    speech_text:   { type: 'STRING' },
+                    encouragement: { type: 'STRING' },
+                    category:      { type: 'STRING' }
+                  },
+                  required: ['detected']
+                }
+              }
+            })
+          });
+
+          if (response.ok) break;
+
+          if (response.status === 429 || response.status === 403) {
+            this.rotateKey();
+            attempts++;
+          } else {
+            break;
+          }
+        }
+
+        if (!response || !response.ok) {
+          const errData = await response?.json().catch(() => ({}));
+          throw new Error(errData?.error?.message || `خطأ في الاتصال (${response?.status || 'Network'})`);
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) return;
+
+        try {
+          result = JSON.parse(text.trim());
+        } catch {
+          const match = text.match(/\{[\s\S]*?\}/);
+          if (!match) return;
+          result = JSON.parse(match[0]);
         }
       }
 
-      if (!response || !response.ok) {
-        const errData = await response?.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `خطأ في الاتصال (${response?.status || 'Network'})`);
-      }
-
-      const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!text) return;
-
-      // Parse JSON — robust extraction
-      let result;
-      try {
-        result = JSON.parse(text.trim());
-      } catch {
-        const match = text.match(/\{[\s\S]*?\}/);
-        if (!match) return;
-        result = JSON.parse(match[0]);
-      }
-
-      if (result.detected === false) {
-        // Frame blurry or moving — stay quiet during real-time mode
+      if (!result || result.detected === false) {
         if (isManualClick) {
           this.showError('لم نتمكن من تمييز شيء واضح. وجّه الكاميرا وثبّتها.');
         }
@@ -330,7 +348,6 @@ class RneemApp {
         return;
       }
 
-      // Show and speak
       this.handleResult(result);
 
     } catch (err) {
@@ -342,7 +359,6 @@ class RneemApp {
       this.isAnalyzing = false;
       this.captureBtn.classList.remove('analyzing');
       this.loadingOverlay.classList.add('hidden');
-    }
   }
 
   // ── Handle Gemini Result ──
