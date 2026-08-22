@@ -94,10 +94,11 @@ class RneemApp {
     this.checkInitialState();
   }
 
-  // ── Key Pool Rotation Logic ──
+  // ── Key Pool Rotation Logic (Reads local config.js or API_KEYS pool) ──
   getApiKey() {
     if (this.customApiKey) return this.customApiKey;
-    const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+    const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
+    const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
     if (validKeys.length > 0) {
       return validKeys[this.currentKeyIndex % validKeys.length];
     }
@@ -105,7 +106,8 @@ class RneemApp {
   }
 
   rotateKey() {
-    const validKeys = API_KEYS.filter(k => k && k.trim().length > 0);
+    const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
+    const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
     if (validKeys.length > 1) {
       this.currentKeyIndex = (this.currentKeyIndex + 1) % validKeys.length;
       console.log(`[Rneem] Rotated key index to: ${this.currentKeyIndex}`);
