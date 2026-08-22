@@ -184,6 +184,12 @@ class RneemApp {
       });
 
       this.video.srcObject = this.stream;
+      if (this.facingMode === 'user') {
+        this.video.classList.add('mirrored');
+      } else {
+        this.video.classList.remove('mirrored');
+      }
+
       await new Promise(resolve => {
         this.video.onloadedmetadata = () => { this.video.play(); resolve(); };
       });
@@ -210,6 +216,11 @@ class RneemApp {
         audio: false
       });
       this.video.srcObject = this.stream;
+      if (this.facingMode === 'user') {
+        this.video.classList.add('mirrored');
+      } else {
+        this.video.classList.remove('mirrored');
+      }
     } catch {
       this.facingMode = this.facingMode === 'environment' ? 'user' : 'environment';
     }
