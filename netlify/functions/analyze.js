@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// 🔒 Netlify Serverless Function: Secure Gemini Vision Handler
-// Hides API Keys in Netlify Environment Variables (GEMINI_API_KEYS)
+// 🔒 Netlify Serverless Function: Optimized Gemini Vision Engine
+// High Performance, Multi-Key Rotation & Auto-Retry
 // ═══════════════════════════════════════════════════════════════
 
 const GEMINI_MODEL = 'gemini-3.6-flash';
@@ -35,10 +35,9 @@ JSON Schema (When Blurred or Moving):
   "detected": false
 }`;
 
-let keyIndex = 0;
+let currentKeyIndex = 0;
 
 exports.handler = async function(event, context) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -60,7 +59,6 @@ exports.handler = async function(event, context) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Image data missing' }) };
     }
 
-    // Read keys from Netlify Environment Variable (comma separated or single)
     const keysEnv = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
     const keys = keysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0);
 
@@ -68,7 +66,7 @@ exports.handler = async function(event, context) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'لم يتم ضبط مفاتيح Gemini API في بيئة Netlify (GEMINI_API_KEYS)' })
+        body: JSON.stringify({ error: 'لم يتم ضبط متغير GEMINI_API_KEYS في بيئة Netlify' })
       };
     }
 
@@ -76,7 +74,7 @@ exports.handler = async function(event, context) {
     let geminiResponse = null;
 
     while (attempts < keys.length) {
-      const apiKey = keys[keyIndex % keys.length];
+      const apiKey = keys[currentKeyIndex % keys.length];
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
       try {
@@ -112,13 +110,12 @@ exports.handler = async function(event, context) {
 
         if (res.ok) {
           geminiResponse = await res.json();
-          break; // Success!
+          break;
         }
 
-        // If rate limited or quota error, rotate key and retry
         if (res.status === 429 || res.status === 403) {
-          console.warn(`Key index ${keyIndex} rate limited (${res.status}), rotating...`);
-          keyIndex = (keyIndex + 1) % keys.length;
+          console.warn(`[Netlify Function] Key index ${currentKeyIndex} rate limited (${res.status}), rotating...`);
+          currentKeyIndex = (currentKeyIndex + 1) % keys.length;
           attempts++;
         } else {
           const errText = await res.text();
@@ -126,7 +123,7 @@ exports.handler = async function(event, context) {
         }
       } catch (err) {
         attempts++;
-        keyIndex = (keyIndex + 1) % keys.length;
+        currentKeyIndex = (currentKeyIndex + 1) % keys.length;
         if (attempts >= keys.length) throw err;
       }
     }
@@ -136,7 +133,6 @@ exports.handler = async function(event, context) {
       return { statusCode: 200, headers, body: JSON.stringify({ detected: false }) };
     }
 
-    // Parse output
     let parsed;
     try {
       parsed = JSON.parse(text.trim());
@@ -152,7 +148,7 @@ exports.handler = async function(event, context) {
     };
 
   } catch (err) {
-    console.error('Serverless function error:', err);
+    console.error('[Netlify Function Error]:', err);
     return {
       statusCode: 500,
       headers,
