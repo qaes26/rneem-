@@ -1,41 +1,32 @@
 // ═══════════════════════════════════════════════════════════════
-// 🧠  رنيم — Main Application Logic (v5 — Super-Fast Vision Engine)
-// Real-time Camera → Fast Canvas → Gemini 1.5 Flash → Arabic TTS
+// 🧠  رنيم — Main Application Logic (Groq Vision Engine: llama-3.2-11b-vision-preview)
+// Real-time Camera → Compressed Canvas → Groq Cloud API → Arabic TTS (rate=0.75)
 // ═══════════════════════════════════════════════════════════════
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GROQ_MODEL = 'llama-3.2-11b-vision-preview';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
-const GEMINI_PROMPT = `You are an expert digital speech-language pathologist and mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
+const SYSTEM_VISION_PROMPT = `You are an expert digital speech-language pathologist and real-time mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
 
-Task: Look at the image and IMMEDIATELY IDENTIFY ANY main object, item, animal, person, food, furniture, tool, garment, or scene element visible.
+Task: Identify the primary central object visible in the image (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
 
-Strict Execution Rules:
-1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic.
-2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
-3. Full Diacritization (Mandatory Tashkeel): EVERY SINGLE Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween). This is CRITICAL for TTS pronunciation accuracy.
-4. Syllable/Phonetic Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
-5. Positive Encouragement: Provide a short, enthusiastic Arabic praise phrase (e.g., "أَحْسَنْتَ يَا بَطَل!", "رَائِعٌ يَا شَاطِر!", "مُمْتَازٌ يا ذَكِيّ!").
-6. Spoken Sentence (TTS Ready): Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and the encouragement phrase. Use proper punctuation (periods/commas) for natural vocal pauses in TTS.
+Execution Rules:
+1. Identify the primary object as a simple singular noun in Modern Standard Arabic.
+2. Full Diacritization (Mandatory Tashkeel): EVERY Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween).
+3. Syllable Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
+4. Speech Sentence: Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and encouragement.
+5. Return JSON ONLY with NO additional text.
 
-JSON Schema:
+JSON Output Schema:
 {
   "word": "بَابٌ",
   "phonics": "بَا - بٌ",
   "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
-  "encouragement": "أَحْسَنْتَ يَا بَطَل!",
-  "category": "أَثَاثٌ وَأَدَوَاتٌ"
+  "encouragement": "أَحْسَنْتَ يَا بَطَل!"
 }`;
 
-// 🔑 Gemini API Keys Pool (Keys are securely loaded from Netlify Environment Variables: GEMINI_API_KEYS)
-const API_KEYS = [
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
-  "",
+// 🔑 Groq API Keys Pool (Keys are loaded from config.js locally or Netlify Environment Variables: GROQ_API_KEYS)
+const GROQ_API_KEYS = [
   "",
   "",
   ""
@@ -63,8 +54,7 @@ class RneemApp {
     this.targetBox = document.getElementById('target-box');
 
     // App State
-    this.currentKeyIndex = 0;
-    this.customApiKey = localStorage.getItem('rneem_api_key') || '';
+    this.customApiKey = localStorage.getItem('rneem_groq_key') || '';
     this.stream = null;
     this.facingMode = 'environment';
     this.isSpeaking = false;
@@ -75,17 +65,18 @@ class RneemApp {
     this.lastWord = '';
     this.lastDetectionTime = 0;
     this.cooldownMs = 4000;
+    this.isDebounced = false;
 
     // Event Bindings
     this.saveKeyBtn.addEventListener('click', () => this.saveApiKey());
     this.apiKeyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.saveApiKey(); });
     this.startBtn.addEventListener('click', () => this.startCamera());
     this.cameraSwitchBtn.addEventListener('click', () => this.switchCamera());
-    this.captureBtn.addEventListener('click', () => this.captureAndAnalyze(true));
+    this.captureBtn.addEventListener('click', () => this.handleManualCapture());
     this.autoToggle.addEventListener('change', () => this.toggleAutoDetect());
     this.changeKeyBtn.addEventListener('click', () => this.showSetupScreen());
 
-    // Load Microsoft Arabic Voices
+    // Load Microsoft / Browser Arabic Voices
     this.loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = () => this.loadVoices();
@@ -95,24 +86,38 @@ class RneemApp {
     this.checkInitialState();
   }
 
-  // ── Key Pool Rotation Logic (Reads local config.js or API_KEYS pool) ──
-  getApiKey() {
-    if (this.customApiKey) return this.customApiKey;
-    const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
-    const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
-    if (validKeys.length > 0) {
-      return validKeys[this.currentKeyIndex % validKeys.length];
-    }
-    return '';
+  // ── Key Pool Resolution & Random Selection ──
+  getGroqKeyPool() {
+    const localKeys = (typeof LOCAL_GROQ_KEYS !== 'undefined' && Array.isArray(LOCAL_GROQ_KEYS)) ? LOCAL_GROQ_KEYS : [];
+    const merged = [...GROQ_API_KEYS, ...localKeys];
+    if (this.customApiKey) merged.unshift(this.customApiKey);
+    return merged.filter(k => k && k.trim().length > 0);
   }
 
-  rotateKey() {
-    const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
-    const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
-    if (validKeys.length > 1) {
-      this.currentKeyIndex = (this.currentKeyIndex + 1) % validKeys.length;
-      console.log(`[Rneem] Rotated key index to: ${this.currentKeyIndex}`);
-    }
+  getRandomKey(pool) {
+    if (!pool || pool.length === 0) return '';
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    return pool[randomIndex];
+  }
+
+  // ── Anti-Spam / Debounce Protection (2 Seconds Delay) ──
+  handleManualCapture() {
+    if (this.isDebounced || this.isAnalyzing || this.isSpeaking) return;
+
+    // Trigger 2-Second Debounce Protection
+    this.isDebounced = true;
+    this.captureBtn.disabled = true;
+    this.captureBtn.style.opacity = '0.5';
+    this.captureBtn.style.pointerEvents = 'none';
+
+    setTimeout(() => {
+      this.isDebounced = false;
+      this.captureBtn.disabled = false;
+      this.captureBtn.style.opacity = '1';
+      this.captureBtn.style.pointerEvents = 'auto';
+    }, 2000);
+
+    this.captureAndAnalyze(true);
   }
 
   // ── App Startup ──
@@ -125,18 +130,18 @@ class RneemApp {
     const key = this.apiKeyInput.value.trim();
     if (key) {
       this.customApiKey = key;
-      localStorage.setItem('rneem_api_key', key);
+      localStorage.setItem('rneem_groq_key', key);
     }
     this.setupScreen.classList.add('hidden');
     this.permissionScreen.classList.remove('hidden');
   }
 
   showSetupScreen() {
-    this.apiKeyInput.value = this.customApiKey || this.getApiKey();
+    this.apiKeyInput.value = this.customApiKey || '';
     this.setupScreen.classList.remove('hidden');
   }
 
-  // ── Load Microsoft Arabic Voices (Web Speech API Local) ──
+  // ── Load Arabic Voices ──
   loadVoices() {
     const voices = speechSynthesis.getVoices();
     this.arabicVoice =
@@ -147,7 +152,7 @@ class RneemApp {
       null;
 
     if (this.arabicVoice) {
-      console.log(`[Rneem] Selected Arabic Voice: ${this.arabicVoice.name}`);
+      console.log(`[Rneem Groq] Selected Arabic Voice: ${this.arabicVoice.name}`);
     }
   }
 
@@ -170,7 +175,7 @@ class RneemApp {
     }
   }
 
-  // ── High Performance Camera Setup ──
+  // ── Camera Setup ──
   async startCamera() {
     try {
       if (this.stream) {
@@ -225,7 +230,7 @@ class RneemApp {
     }
   }
 
-  // ── Optimized Ultra-Fast Vision Recognition Engine ──
+  // ── Groq Cloud Vision Engine (llama-3.2-11b-vision-preview) ──
   async captureAndAnalyze(isManualClick = false) {
     if (this.isAnalyzing || this.isSpeaking) return;
 
@@ -243,7 +248,7 @@ class RneemApp {
     }
 
     try {
-      // Scale canvas down to 512px max for lightning fast upload (< 20KB)
+      // Scale canvas down to 512px max for ultra-lightweight payload (< 15KB)
       const maxDim = 512;
       let width = this.video.videoWidth || 640;
       let height = this.video.videoHeight || 480;
@@ -261,7 +266,7 @@ class RneemApp {
 
       let result = null;
 
-      // 1. Try Netlify Function Proxy First (Backend serverless)
+      // 1. Try Netlify Serverless Proxy First
       try {
         const netlifyRes = await fetch('/.netlify/functions/analyze', {
           method: 'POST',
@@ -273,63 +278,74 @@ class RneemApp {
           result = await netlifyRes.json();
         }
       } catch (e) {
-        console.warn('[Rneem] Netlify Proxy bypassed:', e);
+        console.warn('[Groq App] Netlify Proxy bypassed:', e);
       }
 
-      // 2. Direct Gemini Call Fallback (Checks customApiKey, LOCAL_API_KEYS, and API_KEYS)
+      // 2. Direct Groq API Client Fallback (Random key selection & 429 auto-rotation)
       if (!result || !result.word) {
-        const localKeys = (typeof LOCAL_API_KEYS !== 'undefined' && Array.isArray(LOCAL_API_KEYS)) ? LOCAL_API_KEYS : [];
-        const validKeys = [...API_KEYS, ...localKeys].filter(k => k && k.trim().length > 0);
-
-        if (validKeys.length === 0 && !this.customApiKey) {
-          if (isManualClick) this.showError('يرجى إضافة مفتاح API في الإعدادات ⚙️');
+        const keyPool = this.getGroqKeyPool();
+        if (keyPool.length === 0) {
+          if (isManualClick) this.showError('يرجى التأكد من مفاتيح Groq API');
           return;
         }
 
+        // Random starting index for device load balancing
+        let startIndex = Math.floor(Math.random() * keyPool.length);
         let attempts = 0;
         let response = null;
-        const maxAttempts = validKeys.length > 0 ? validKeys.length : 1;
 
-        while (attempts < maxAttempts) {
-          const currentKey = this.getApiKey();
-          if (!currentKey) break;
+        while (attempts < keyPool.length) {
+          const currentKey = keyPool[(startIndex + attempts) % keyPool.length];
 
-          response = await fetch(`${GEMINI_ENDPOINT}?key=${currentKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: GEMINI_PROMPT },
-                  { inline_data: { mime_type: 'image/jpeg', data: base64 } }
-                ]
-              }],
-              generationConfig: {
+          try {
+            response = await fetch(GROQ_ENDPOINT, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${currentKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: GROQ_MODEL,
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: SYSTEM_VISION_PROMPT },
+                      {
+                        type: 'image_url',
+                        image_url: { url: `data:image/jpeg;base64,${base64}` }
+                      }
+                    ]
+                  }
+                ],
+                response_format: { type: 'json_object' },
                 temperature: 0.2,
-                maxOutputTokens: 300,
-                responseMimeType: 'application/json'
-              }
-            })
-          });
+                max_tokens: 300
+              })
+            });
 
-          if (response.ok) break;
+            if (response.ok) break;
 
-          if (response.status === 429 || response.status === 403) {
-            this.rotateKey();
+            // Auto-rotate silently on 429 Rate Limit
+            if (response.status === 429 || response.status === 403 || response.status === 503) {
+              console.warn(`[Groq Client] Key index ${(startIndex + attempts) % keyPool.length} rate limited (${response.status}), trying next key...`);
+              attempts++;
+            } else {
+              attempts++;
+            }
+          } catch (fetchErr) {
             attempts++;
-          } else {
-            break;
           }
         }
 
         if (response && response.ok) {
           const data = await response.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
+          const contentText = data?.choices?.[0]?.message?.content;
+          if (contentText) {
             try {
-              result = JSON.parse(text.trim());
+              result = JSON.parse(contentText.trim());
             } catch {
-              const match = text.match(/\{[\s\S]*?\}/);
+              const match = contentText.match(/\{[\s\S]*?\}/);
               if (match) result = JSON.parse(match[0]);
             }
           }
@@ -347,7 +363,7 @@ class RneemApp {
       this.handleResult(result);
 
     } catch (err) {
-      console.error('[Rneem] Recognition Error:', err);
+      console.error('[Groq Engine Error]:', err);
       if (isManualClick) {
         this.showError('حدث خطأ بالاتصال. حاول مرة أخرى.');
       }
@@ -358,7 +374,7 @@ class RneemApp {
     }
   }
 
-  // ── Handle Gemini Result ──
+  // ── Handle Result ──
   handleResult(result) {
     const { word, phonics, speech_text, encouragement, category } = result;
 
@@ -408,7 +424,7 @@ class RneemApp {
     setTimeout(() => this.updateStatus('جاهز — الكشف التلقائي مفعّل 🎥', 'active'), 2500);
   }
 
-  // ── Render Result Card ──
+  // ── Render Result Card with Replay Button ──
   showResult(data) {
     this.resultCard.innerHTML = `
       <div class="word-display">
@@ -420,7 +436,7 @@ class RneemApp {
         <div class="actions">
           <button class="btn btn--primary" id="repeat-btn" onclick="app.repeatCurrent()">
             <span class="btn__icon">🔊</span>
-            أَعِدْ النُّطْقَ
+            إِعَادَةُ النُّطْقِ
           </button>
         </div>
       </div>
@@ -428,7 +444,7 @@ class RneemApp {
     this.resultCard.classList.add('visible');
   }
 
-  // ── High Precision Sequential Speech Synthesis ──
+  // ── High Precision Sequential Speech Synthesis (Slow Rate = 0.75 for Pediatric Therapy) ──
   speakSequential(parts) {
     speechSynthesis.cancel();
     this.isSpeaking = true;
@@ -449,21 +465,15 @@ class RneemApp {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ar-SA';
 
-      if (index === 0) {
-        utterance.rate = 0.85;
-      } else if (index === 1) {
-        utterance.rate = 0.55;
-        utterance.pitch = 1.0;
-      } else {
-        utterance.rate = 0.95;
-        utterance.pitch = 1.15;
-      }
+      // 🎯 Slow rate = 0.75 as requested for clear pediatric pronunciation
+      utterance.rate = 0.75;
+      utterance.pitch = index === 1 ? 1.0 : 1.1;
 
       if (this.arabicVoice) {
         utterance.voice = this.arabicVoice;
       }
 
-      utterance.onend = () => setTimeout(speakNext, 400);
+      utterance.onend = () => setTimeout(speakNext, 450);
       utterance.onerror = () => setTimeout(speakNext, 150);
 
       index++;
@@ -484,10 +494,10 @@ class RneemApp {
     if (this.autoToggle.checked) {
       if (this.autoDetectInterval) clearInterval(this.autoDetectInterval);
       this.autoDetectInterval = setInterval(() => {
-        if (!this.isAnalyzing && !this.isSpeaking) {
+        if (!this.isAnalyzing && !this.isSpeaking && !this.isDebounced) {
           this.captureAndAnalyze(false);
         }
-      }, 3000);
+      }, 3500);
     } else {
       clearInterval(this.autoDetectInterval);
       this.autoDetectInterval = null;

@@ -1,46 +1,37 @@
 // ═══════════════════════════════════════════════════════════════
-// 🔒 Netlify Serverless Function: Ultra-Fast Gemini 1.5 Flash Engine
-// Backend Serverless Handler — 100% Secure Server-Side Execution
+// 🔒 Netlify Serverless Function: Groq Cloud Vision Engine
+// Model: llama-3.2-11b-vision-preview
+// Key Randomization & Auto Failover Rotation on 429 Rate Limit
 // ═══════════════════════════════════════════════════════════════
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GROQ_MODEL = 'llama-3.2-11b-vision-preview';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
-const GEMINI_PROMPT = `You are an expert digital speech-language pathologist and mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
+const SYSTEM_VISION_PROMPT = `You are an expert digital speech-language pathologist and real-time mobile computer vision engine specialized in pediatric speech therapy for Arabic-speaking children.
 
-Task: Look at the image and IMMEDIATELY IDENTIFY ANY main object, item, animal, person, food, furniture, tool, garment, or scene element visible.
+Task: Identify the primary central object visible in the image (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ).
 
-Strict Execution Rules:
-1. Always Identify: Identify whatever primary object is visible in Modern Standard Arabic (e.g. door, pen, phone, cup, car, chair, table, window, shoe, shirt, man, woman, child, book, toy, apple, banana, picture, wall, light, face, hair, glasses).
-2. Single Child-Friendly Arabic Noun: Identify the object as a simple singular noun in Modern Standard Arabic (e.g. بَابٌ, قَلَمٌ, هَاتِفٌ, كُوبٌ, سَيَّارَةٌ, كُرْسِيٌّ, طَاوِلَةٌ, نَافِذَةٌ, حِذَاءٌ, قَمِيصٌ, رَجُلٌ, امْرَأَةٌ, طِفْلٌ, كِتَابٌ, لُعْبَةٌ, تُفَّاحَةٌ, مَوْزٌ, صُورَةٌ, جِدَارٌ, وَجْهٌ, شَعْرٌ, نَظَّارَةٌ).
-3. Full Diacritization (Mandatory Tashkeel): EVERY SINGLE Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween). This is CRITICAL for TTS pronunciation accuracy.
-4. Syllable/Phonetic Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
-5. Positive Encouragement: Provide a short, enthusiastic Arabic praise phrase (e.g., "أَحْسَنْتَ يَا بَطَل!", "رَائِعٌ يَا شَاطِر!", "مُمْتَازٌ يا ذَكِيّ!").
-6. Spoken Sentence (TTS Ready): Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and the encouragement phrase. Use proper punctuation (periods/commas) for natural vocal pauses in TTS.
+Execution Rules:
+1. Identify the primary object as a simple singular noun in Modern Standard Arabic.
+2. Full Diacritization (Mandatory Tashkeel): EVERY Arabic letter in "word", "phonics", "speech_text", and "encouragement" MUST have complete diacritics (Fatha, Damma, Kasra, Sukun, Shaddah, Tanween).
+3. Syllable Breakdown (Phonics): Split the Arabic noun into clear phonetic syllables separated by hyphens with spaces (e.g., "بَا - بٌ", "قَـ - لَـ - مٌ").
+4. Speech Sentence: Compose a natural speech sentence starting with the correct demonstrative pronoun ("هَذَا" or "هَذِهِ"), followed by the word, the phonetic breakdown, and encouragement.
+5. Return JSON ONLY with NO additional text or markdown.
 
-JSON Schema:
+JSON Output Schema:
 {
   "word": "بَابٌ",
   "phonics": "بَا - بٌ",
   "speech_text": "هَذَا بَابٌ. بَا - بٌ. أَحْسَنْتَ يَا بَطَل!",
-  "encouragement": "أَحْسَنْتَ يَا بَطَل!",
-  "category": "أَثَاثٌ وَأَدَوَاتٌ"
+  "encouragement": "أَحْسَنْتَ يَا بَطَل!"
 }`;
 
-// Serverless Backend Key Pool (Rotates automatically on quota/rate-limit)
-const DEFAULT_KEYS = [
-  "AIzaSyCyQv-Nx6zTXHV3drhTdFn6IoeYq_ghuao",
-  "AIzaSyBdBpOMAekV_z9vwICWczZ44BeTxWbrnDQ",
-  "AIzaSyCoqly3NiY-jMOwDIdiM_F6UvIm4oyUs10",
-  "AIzaSyDnU5PICh-8oaocsl9rDJCQqSwqBC6M4lg",
-  "AIzaSyC1NbVk2uxZoYNdYnSsX4h6nuF_-35VLoY",
-  "AIzaSyB6QxhpbIjNBnUmdEvACxlGeHK2gGqCGGY",
-  "AIzaSyDyPqtd9g-9MSD-PjRI9ZaFNfKJpxlSeBo",
-  "AIzaSyDHLjJWXoG3-MJ-kmCgd1mBu2L-dm69iiE",
-  "AIzaSyDglzTpSgjuLQmx43ljLB6SFs8fZL7J5B8",
-  "AIzaSyB6qE9ElY6DXr3RHP1P1VZIlaLjXluBXTk"
+// Serverless Backend Key Pool (Keys are loaded from Netlify Environment Variables: GROQ_API_KEYS)
+const DEFAULT_GROQ_KEYS = [
+  "",
+  "",
+  ""
 ];
-
-let currentKeyIndex = 0;
 
 exports.handler = async function (event, context) {
   const headers = {
@@ -64,68 +55,77 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Image data missing' }) };
     }
 
-    const keysEnv = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
+    const keysEnv = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '';
     let keys = keysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0);
     if (keys.length === 0) {
-      keys = DEFAULT_KEYS;
+      keys = DEFAULT_GROQ_KEYS;
     }
 
+    // Pick a random starting index for load balancing across devices
+    let startIndex = Math.floor(Math.random() * keys.length);
     let attempts = 0;
-    let geminiResponse = null;
+    let groqResponseData = null;
 
     while (attempts < keys.length) {
-      const apiKey = keys[currentKeyIndex % keys.length];
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+      const apiKey = keys[(startIndex + attempts) % keys.length];
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(GROQ_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: GEMINI_PROMPT },
-                { inline_data: { mime_type: 'image/jpeg', data: image } }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.2,
-              maxOutputTokens: 300,
-              responseMimeType: 'application/json'
-            }
+            model: GROQ_MODEL,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: SYSTEM_VISION_PROMPT },
+                  {
+                    type: 'image_url',
+                    image_url: { url: `data:image/jpeg;base64,${image}` }
+                  }
+                ]
+              }
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.2,
+            max_tokens: 300
           })
         });
 
         if (res.ok) {
-          geminiResponse = await res.json();
+          groqResponseData = await res.json();
           break;
         }
 
-        if (res.status === 429 || res.status === 403) {
-          console.warn(`[Netlify Serverless] Key index ${currentKeyIndex} rate limited (${res.status}), rotating...`);
-          currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+        // On 429 Rate Limit or 403/503, rotate to next key silently
+        if (res.status === 429 || res.status === 403 || res.status === 503) {
+          console.warn(`[Groq Serverless] Key index ${(startIndex + attempts) % keys.length} rate limited (${res.status}), trying next key...`);
           attempts++;
         } else {
           const errText = await res.text();
-          throw new Error(`Gemini API Error (${res.status}): ${errText}`);
+          console.error(`[Groq Serverless Error ${res.status}]:`, errText);
+          attempts++;
         }
       } catch (err) {
+        console.error(`[Groq Fetch Error]:`, err);
         attempts++;
-        currentKeyIndex = (currentKeyIndex + 1) % keys.length;
-        if (attempts >= keys.length) throw err;
       }
     }
 
-    const text = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
+    const contentText = groqResponseData?.choices?.[0]?.message?.content;
+    if (!contentText) {
       return { statusCode: 200, headers, body: JSON.stringify({ word: '' }) };
     }
 
     let parsed;
     try {
-      parsed = JSON.parse(text.trim());
+      parsed = JSON.parse(contentText.trim());
     } catch {
-      const match = text.match(/\{[\s\S]*?\}/);
+      const match = contentText.match(/\{[\s\S]*?\}/);
       parsed = match ? JSON.parse(match[0]) : { word: '' };
     }
 
@@ -136,7 +136,7 @@ exports.handler = async function (event, context) {
     };
 
   } catch (err) {
-    console.error('[Netlify Serverless Error]:', err);
+    console.error('[Groq Netlify Function Error]:', err);
     return {
       statusCode: 500,
       headers,
